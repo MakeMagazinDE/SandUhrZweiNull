@@ -5,7 +5,9 @@
 // units: mm; microseconds; radians
 // origin: bottom left of drawing surface
 
-// Make: Addition: Set Board to Ardunino Nano if MikroE MINI AT is used
+// Make: 
+// SandUhr 2.0 Addition
+// Set "Board" menu to Ardunino Nano if MikroE MINI AT is used
 
 // time library see http://playground.arduino.cc/Code/time 
 
