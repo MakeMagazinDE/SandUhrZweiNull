@@ -9,7 +9,14 @@
 // SandUhr 2.0 Addition
 // Set "Board" menu to Ardunino Nano if MikroE MINI AT is used
 
+// Make: Luca
+// Missing RTC Code added, refactoring
+
 // time library see http://playground.arduino.cc/Code/time
+// Use DS3232 or compatible (e.g. 3231; 1307 is not recommended due to high time drift)
+// Library available: https://github.com/JChristensen/DS3232RTC
+// #define USE_RTC
+// #define DST //apply daylight saving time
 
 // delete or mark the next line as comment when done with calibration
 //#define CALIBRATION
@@ -56,6 +63,11 @@
 #include <Time.h> // see http://playground.arduino.cc/Code/time 
 #include <Servo.h>
 
+#ifdef USE_RTC
+#include <Wire.h>
+#include <DS3232RTC.h>
+#endif //USE_RTC
+
 int servoLift = LIFT2;
 
 Servo ServoLift_1;  //
@@ -91,7 +103,11 @@ void setup()
 #endif
 
   drawTo(idleX, idleY);
+#ifdef USE_RTC
+  setSyncProvider(RTC.get);
+#else
   setTime(10, 6, 0, 0, 0, 0);
+#endif //USE_RTC
 }
 
 void loop()
@@ -107,10 +123,11 @@ void loop()
   delay(1000);
 
 #else
-
-
-  int i = 0;
-  if (last_min != minute()) {
+  time_t t = now();
+#ifdef DST
+  dst(t);
+#endif //DST
+  if (last_min != minute(t)) {
 
     motor_on();
 
@@ -122,25 +139,14 @@ void loop()
 
     lift(1);
 
-    hour();
-    while ((i + 1) * 10 <= hour())
-    {
-      i++;
-    }
+    number(0, 20, hour(t) / 10, NUMBERSCALE); //First digit
+    number(20, 22, hour(t) % 10, NUMBERSCALE); //Second digit
+    number(39, 21, 11, NUMBERSCALE); // Colon
 
-    number(0, 20, i, NUMBERSCALE);
-    number(20, 22, (hour() - i * 10), NUMBERSCALE);
-    number(39, 21, 11, NUMBERSCALE); // Doppelpunkt
-
-    i = 0;
-    while ((i + 1) * 10 <= minute())
-    {
-      i++;
-    }
-    number(51, 17, i, NUMBERSCALE + 0.1);
-    number(72, 15, (minute() - i * 10), NUMBERSCALE + 0.13);
+    number(51, 17, minute(t) / 10, NUMBERSCALE + 0.1); //First digit
+    number(72, 15, minute(t) % 10, NUMBERSCALE + 0.13); //Second digit
     lift(2);
-    last_min = minute();
+    last_min = minute(t);
 
     drawTo(idleX, idleY);
 
@@ -249,7 +255,6 @@ void number(float bx, float by, int num, float scale) {
   }
 }
 
-
 void motor_on() {
   int i = 0;
   ServoLift_1.attach(SERVOPINLIFT);   //  lifting servo
@@ -354,7 +359,6 @@ void lift(char lift) {
   }
 }
 
-
 void bogenUZS(float bx, float by, float radius, int start, int ende, float sqee) {
   float inkr = -0.05;
   float count = 0;
@@ -379,7 +383,6 @@ void bogenGZS(float bx, float by, float radius, int start, int ende, float sqee)
   }
   while ((start + count) <= ende);
 }
-
 
 void drawTo(double pX, double pY) {
   double dx, dy, c;
@@ -442,7 +445,36 @@ void set_XY(double Tx, double Ty)
 
 }
 
-
-
-
-
+#ifdef DST
+#define HOUR (60 * 60)
+/*
+ * Applies DST to time_t struct
+ */
+boolean dst(time_t &t) {
+	if (month(t) > 3 && month(t) < 10) { //Apr-Sep
+		t += HOUR;
+		return true;
+	} else if (month(t) == 3 && day(t) - weekday(t) >= 24) { //Date at or after last sunday in March
+		if (weekday(t) == 1) { //Sunday to switch to dst
+			if (hour(t) >= 2) { //Time after 2AM
+				t += HOUR;
+	  			return true;
+			}
+		} else { //Date after last sunday in March
+			t += HOUR;
+			return true;
+		}
+	} else if (month(t) == 10 && day(t) - weekday(t) < 24) { //Date before last sunday in October
+		t += HOUR;
+		return true;
+	} else if (month(t) == 10 && day(t) - weekday(t) >= 24) { //Date at or after last sunday in March
+		if (weekday(t) == 1) { //Sunday to switch back from dst
+			if (hour(t) < 3) { //Time before 2AM without DST (3AM DST, wich doesn't exist)
+				t += HOUR;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+#endif //DST
